@@ -1,9 +1,15 @@
 /**
- * File: KDTree.h
- * ------------------------
- * An interface representing a kd-tree in some number of dimensions. The tree
- * can be constructed from a set of data and then queried for membership and
- * k nearest neighbors.
+ * @file KDTree.h
+ * @brief K维树（KD-Tree）数据结构实现
+ *
+ * 提供高效的多维空间点集存储和查询功能
+ * 支持最近邻搜索、K近邻搜索和范围搜索
+ *
+ * 主要特性：
+ * - 模板化设计，支持任意维度
+ * - O(log n)平均时间复杂度的查询
+ * - 支持动态插入
+ * - 提供多种查询接口
  */
 
 #ifndef KDTREE_INCLUDED
@@ -22,81 +28,149 @@
 
 
 namespace KDTree{
+    /**
+     * @class KDTree
+     * @brief K维树模板类
+     * @tparam N 空间维度
+     * @tparam ElemType 与点关联的数据类型
+     *
+     * 实现空间索引数据结构，用于高效的多维空间查询
+     */
     template <std::size_t N, typename ElemType>
     class KDTree {
     public:
-        // Constructs an empty KDTree.
+        // ========== 构造与析构 ==========
+        /**
+         * @brief 构造空的KD树
+         */
         KDTree();
 
-        // Efficiently build a balanced KD-tree from a large set of points
+        /**
+         * @brief 从点集高效构建平衡KD树
+         * @param points 点和关联数据的向量
+         */
         KDTree(std::vector<std::pair<Point<N>, ElemType>>& points);
 
-        // Frees up all the dynamically allocated resources
+        /**
+         * @brief 释放所有动态分配的资源
+         */
         ~KDTree();
 
-        // Deep-copies the contents of another KDTree into this one.
+        /**
+         * @brief 深拷贝构造函数
+         */
         KDTree(const KDTree& rhs);
+
+        /**
+         * @brief 赋值运算符
+         */
         KDTree& operator=(const KDTree& rhs);
 
-        // Returns the dimension of the points stored in this KDTree.
+        // ========== 基本属性查询 ==========
+        /**
+         * @brief 返回存储点的维度
+         */
         std::size_t dimension() const;
 
-        // Returns the number of elements in the kd-tree and whether the tree is empty
+        /**
+         * @brief 返回KD树中的元素数量
+         */
         std::size_t size() const;
+
+        /**
+         * @brief 判断KD树是否为空
+         */
         bool empty() const;
 
-        // Returns whether the specified point is contained in the KDTree.
+        /**
+         * @brief 判断指定点是否在KD树中
+         * @param pt 待查询的点
+         * @return 是否包含该点
+         */
         bool contains(const Point<N>& pt) const;
 
-        /*
-         * Inserts the point pt into the KDTree, associating it with the specified value.
-         * If the element already existed in the tree, the new value will overwrite the existing one.
+        // ========== 插入与访问 ==========
+        /**
+         * @brief 插入点到KD树
+         * @param pt 待插入的点
+         * @param value 关联的值（默认为ElemType的默认值）
+         *
+         * 如果点已存在，则覆盖其关联值
          */
         void insert(const Point<N>& pt, const ElemType& value=ElemType());
 
-        /*
-         * Returns a reference to the value associated with point pt in the KDTree.
-         * If the point does not exist, then it is added to the KDTree using the
-         * default value of ElemType as its key.
+        /**
+         * @brief 访问点关联的值（支持插入）
+         * @param pt 点
+         * @return 关联值的引用
+         *
+         * 如果点不存在，则使用默认值插入
          */
         ElemType& operator[](const Point<N>& pt);
 
-        /*
-         * Returns a reference to the key associated with the point pt. If the point
-         * is not in the tree, this function throws an out_of_range exception.
+        /**
+         * @brief 访问点关联的值（不支持插入）
+         * @param pt 点
+         * @return 关联值的引用
+         * @throws out_of_range 如果点不存在
          */
         ElemType& at(const Point<N>& pt);
         const ElemType& at(const Point<N>& pt) const;
 
-        /*
-         * Given a point v and an integer k, finds the k points in the KDTree
-         * nearest to v and returns the most common value associated with those
-         * points. In the event of a tie, one of the most frequent value will be chosen.
+        // ========== 查询函数 ==========
+        /**
+         * @brief K近邻值查询（返回最常见的关联值）
+         * @param key 查询点
+         * @param k 近邻数量
+         * @return 最常见的关联值
+         *
+         * 在k个最近邻中统计最频繁出现的值
          */
         ElemType kNNValue(const Point<N>& key, std::size_t k) const;
-        
-        // Zhefan: This is to implement KNN and return k nearest neighbor coordinate
+
+        /**
+         * @brief K近邻查询（返回坐标）
+         * @param key 查询点
+         * @param k 近邻数量
+         * @param knnVec 输出的k个最近邻点
+         */
         void knn(const Point<N>& key, std::size_t k, std::vector<Point<N>>& knnVec) const;
 
-        // Zhefan: This is to implement KNN and return nearest neighbor
+        /**
+         * @brief 最近邻查询
+         * @param key 查询点
+         * @param nn 输出的最近邻点
+         */
         void nearestNeighbor(const Point<N>& key, Point<N>& nn) const;
 
-        // Zhefan: This is to implement range search with predefined maximum neighbor: 1. first find neighbors 2. pich based on distance 
+        /**
+         * @brief 有界范围搜索
+         * @param key 查询点
+         * @param radius 搜索半径
+         * @param max_neighbor 最大近邻数量
+         * @param neighborhood 输出的近邻点集
+         *
+         * 先找到半径内的所有点，然后根据距离选择最近的max_neighbor个
+         */
         void boundedRangeSearch(const Point<N>& key, double radius, int max_neighbor, std::vector<Point<N>>& neighborhood) const;
 
 
     private:
+        /**
+         * @struct Node
+         * @brief KD树节点结构
+         */
         struct Node {
-            Point<N> point;
-            Node *left;
-            Node *right;
-            int level;  // level of the node in the tree, starts at 0 for the root
-            ElemType value;
+            Point<N> point;       ///< 节点存储的点
+            Node *left;           ///< 左子树
+            Node *right;          ///< 右子树
+            int level;            ///< 节点在树中的层级（根节点为0）
+            ElemType value;       ///< 关联的数据
             Node(const Point<N>& _pt, int _level, const ElemType& _value=ElemType()):
                 point(_pt), left(NULL), right(NULL), level(_level), value(_value) {}
-        };  
+        };
 
-        // Root node of the KD-Tree
+        // 根节点
         Node* root_;
 
         // Number of points in the KD-Tree

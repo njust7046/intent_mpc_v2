@@ -1,8 +1,16 @@
-/*
-*	File: rrtOctomap.h
-*	---------------
-*   RRT planner class based on Octomap.
-*/
+/**
+ * @file rrtOctomap.h
+ * @brief 基于Octomap的RRT规划器
+ *
+ * 使用Octomap作为环境表示的RRT路径规划器
+ * Octomap是一种基于八叉树的3D占据栅格地图
+ *
+ * 主要特性:
+ * - 支持3D环境的路径规划
+ * - 基于Octomap的碰撞检测
+ * - 路径快捷方式优化
+ * - ROS可视化支持
+ */
 #ifndef RRTOCTOMAP_H
 #define RRTOCTOMAP_H
 #include <ros/ros.h>
@@ -19,84 +27,209 @@
 
 
 namespace globalPlanner{
+	/**
+	 * @class rrtOctomap
+	 * @brief 基于Octomap的RRT规划器类
+	 * @tparam N 空间维度(通常为3)
+	 *
+	 * 继承自rrtBase,实现基于Octomap的碰撞检测和采样
+	 */
 	template <std::size_t N>
 	class rrtOctomap : public rrtBase<N>{
 	private:
-		ros::NodeHandle nh_;
+		ros::NodeHandle nh_;  ///< ROS节点句柄
 
 	protected:
-		ros::ServiceClient mapClient_;
-		ros::Subscriber mapSub_;
-		ros::Publisher RRTVisPub_;
-		ros::Publisher pathVisPub_;
+		// ========== ROS接口 ==========
+		ros::ServiceClient mapClient_;     ///< Octomap服务客户端
+		ros::Subscriber mapSub_;           ///< Octomap订阅器
+		ros::Publisher RRTVisPub_;         ///< RRT树可视化发布器
+		ros::Publisher pathVisPub_;        ///< 路径可视化发布器
 
-		double mapRes_;
-		double envLimit_[6];
-		double sampleRegion_[6];
-		std::shared_ptr<octomap::OcTree> map_ {NULL};
-		
-		visualization_msgs::MarkerArray RRTVisMsg_;
-		visualization_msgs::MarkerArray pathVisMsg_;
-		std::vector<visualization_msgs::Marker> RRTVisvec_; // we update this
-		std::vector<visualization_msgs::Marker> pathVisVec_; // update this
-		bool visRRT_;
-		bool visPath_;
-	
-		bool ignoreUnknown_;
-		bool notUpdateSampleRegion_;
-		double maxShortcutThresh_;
+		// ========== 地图相关 ==========
+		double mapRes_;                    ///< 地图分辨率
+		double envLimit_[6];               ///< 环境边界限制 [xmin, xmax, ymin, ymax, zmin, zmax]
+		double sampleRegion_[6];           ///< 采样区域边界
+		std::shared_ptr<octomap::OcTree> map_ {NULL};  ///< Octomap指针
+
+		// ========== 可视化相关 ==========
+		visualization_msgs::MarkerArray RRTVisMsg_;    ///< RRT树可视化消息
+		visualization_msgs::MarkerArray pathVisMsg_;   ///< 路径可视化消息
+		std::vector<visualization_msgs::Marker> RRTVisvec_;   ///< RRT树可视化向量(更新用)
+		std::vector<visualization_msgs::Marker> pathVisVec_;  ///< 路径可视化向量(更新用)
+		bool visRRT_;                      ///< 是否可视化RRT树
+		bool visPath_;                     ///< 是否可视化路径
+
+		// ========== 算法参数 ==========
+		bool ignoreUnknown_;               ///< 是否忽略未知区域(视为自由空间)
+		bool notUpdateSampleRegion_;       ///< 是否不更新采样区域
+		double maxShortcutThresh_;         ///< 路径快捷方式最大阈值
 
 	public:
-		std::thread RRTVisWorker_;
-		std::thread pathVisWorker_;
+		std::thread RRTVisWorker_;         ///< RRT可视化工作线程
+		std::thread pathVisWorker_;        ///< 路径可视化工作线程
 
-		// default constructor
+		// ========== 构造函数 ==========
+		/**
+		 * @brief 默认构造函数
+		 */
 		rrtOctomap();
 
-		// constructor using ros param:
+		/**
+		 * @brief 使用ROS参数构造
+		 * @param nh ROS节点句柄
+		 */
 		rrtOctomap(const ros::NodeHandle& nh);
 
-		// constructor using point format
+		/**
+		 * @brief 完整参数构造函数(Point格式)
+		 * @param nh ROS节点句柄
+		 * @param start 起点
+		 * @param goal 终点
+		 * @param collisionBox 碰撞检测盒尺寸
+		 * @param envBox 环境边界
+		 * @param mapRes 地图分辨率
+		 * @param delQ 增量距离
+		 * @param dR 目标到达半径
+		 * @param connectGoalRatio 连接目标概率
+		 * @param timeout 超时时间
+		 * @param visRRT 是否可视化RRT树
+		 * @param visPath 是否可视化路径
+		 */
 		rrtOctomap(const ros::NodeHandle& nh, KDTree::Point<N> start, KDTree::Point<N> goal, std::vector<double> collisionBox, std::vector<double> envBox, double mapRes, double delQ=0.3, double dR=0.2, double connectGoalRatio=0.10, double timeout=1.0, bool visRRT=false, bool visPath=true);
 
-		// constructor using vector format
+		/**
+		 * @brief 完整参数构造函数(vector格式)
+		 */
 		rrtOctomap(const ros::NodeHandle& nh, std::vector<double> start, std::vector<double> goal,  std::vector<double> collisionBox, std::vector<double> envBox, double mapRes, double delQ=0.3, double dR=0.2, double connectGoalRatio=0.10, double timeout=1.0, bool visRRT=false, bool visPath=true);
 
-		// constructor without start and goal
+		/**
+		 * @brief 无起点终点的构造函数
+		 */
 		rrtOctomap(const ros::NodeHandle& nh, std::vector<double> collisionBox, std::vector<double> envBox, double mapRes, double delQ=0.3, double dR=0.2, double connectGoalRatio=0.10, double timeout=1.0, bool visRRT=false, bool visPath=true);
-		
-		// constructor without nh	
+
+		/**
+		 * @brief 无ROS节点句柄的构造函数
+		 */
 		rrtOctomap(std::vector<double> collisionBox, std::vector<double> envBox, double mapRes, double delQ=0.3, double dR=0.2, double connectGoalRatio=0.10, double timeout=1.0, bool visRRT=false, bool visPath=true);
 
 
-		// update octomap
-		virtual void updateMap(); // update map use service
+		// ========== 地图更新函数 ==========
+		/**
+		 * @brief 更新Octomap(使用服务)
+		 */
+		virtual void updateMap();
+
+		/**
+		 * @brief Octomap回调函数
+		 * @param msg Octomap消息
+		 */
 		void mapCB(const octomap_msgs::Octomap &msg);
-		void updateSampleRegion();// helper function for update sample region
+
+		/**
+		 * @brief 更新采样区域
+		 */
+		void updateSampleRegion();
+
+		/**
+		 * @brief 更新环境边界
+		 * @param range 新的边界范围
+		 */
 		void updateEnvBox(const std::vector<double>& range);
+
+		/**
+		 * @brief 清空环境边界
+		 */
 		void clearEnvBox();
-		
-		// collision checking function based on map and collision box: TRUE => Collision
+
+		// ========== 碰撞检测函数 ==========
+		/**
+		 * @brief 检查点是否发生碰撞
+		 * @param q 待检查的点
+		 * @return true表示碰撞
+		 */
 		virtual bool checkCollision(const KDTree::Point<N>& q);
+
+		/**
+		 * @brief 检查Octomap点是否碰撞
+		 * @param p Octomap点
+		 * @return true表示碰撞
+		 */
 		bool checkCollision(const octomap::point3d& p);
+
+		/**
+		 * @brief 检查单个点的碰撞(可选择是否忽略未知)
+		 * @param p 待检查的点
+		 * @param ignoreUnknown 是否忽略未知区域
+		 * @return true表示碰撞
+		 */
 		bool checkCollisionPoint(const octomap::point3d &p, bool ignoreUnknown=true);
+
+		/**
+		 * @brief 检查线段是否碰撞
+		 * @param q1 线段起点
+		 * @param q2 线段终点
+		 * @return true表示碰撞
+		 */
 		bool checkCollisionLine(const KDTree::Point<N>& q1, const KDTree::Point<N>& q2);
+
+		/**
+		 * @brief 检查Octomap线段是否碰撞
+		 */
 		bool checkCollisionLine(const octomap::point3d& p1, const octomap::point3d& p2);
 
-		// shortcut path
+		// ========== 路径优化函数 ==========
+		/**
+		 * @brief 路径快捷方式优化(确定性)
+		 * @param plan 原始路径
+		 * @param planSc 输出的优化路径
+		 */
 		void shortcutWaypointPaths(const std::vector<KDTree::Point<N>>& plan, std::vector<KDTree::Point<N>>& planSc);
+
+		/**
+		 * @brief 路径快捷方式优化(随机)
+		 * @param plan 原始路径
+		 * @param planSc 输出的优化路径
+		 */
 		void shortcutWaypointPathsRandom(const std::vector<KDTree::Point<N>>& plan, std::vector<KDTree::Point<N>>& planSc);
+
+		/**
+		 * @brief 执行一次随机快捷方式优化
+		 * @param plan 路径(会被修改)
+		 */
 		void randomShortcutOnce(std::vector<KDTree::Point<N>>& plan);
+
+		/**
+		 * @brief 从路径中采样路点
+		 * @param plan 路径
+		 * @param sample 输出的采样点
+		 * @param idx 输出的索引
+		 */
 		void sampleWaypoint(const std::vector<KDTree::Point<N>>& plan, KDTree::Point<N>& sample, int& idx);
 
-		// random sample in valid space (based on current map)
+		// ========== 核心规划函数 ==========
+		/**
+		 * @brief 在有效空间内随机采样
+		 * @param qRand 输出的随机点
+		 */
 		virtual void randomConfig(KDTree::Point<N>& qRand);
 
-		// *** Core function: make plan based on all input ***
+		/**
+		 * @brief 执行RRT规划
+		 * @param plan 输出的路径
+		 */
 		virtual void makePlan(std::vector<KDTree::Point<N>>& plan);
+
+		/**
+		 * @brief 执行RRT规划(ROS消息格式)
+		 * @param plan 输出的路径消息
+		 */
 		virtual void makePlan(nav_msgs::Path& plan);
 
-		// Visualization
+		// ========== 可视化函数 ==========
+		/**
+		 * @brief 启动可视化模块
+		 */
 		void startVisModule();
 		void publishRRTVisMsg();
 		void publishPathVisMsg();

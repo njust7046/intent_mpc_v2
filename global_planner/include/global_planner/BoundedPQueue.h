@@ -1,54 +1,23 @@
 /**
- * Author: Keith Schwarz (htiek@cs.stanford.edu)
+ * @file BoundedPQueue.h
+ * @brief 有界优先队列实现
+ * @author Keith Schwarz (htiek@cs.stanford.edu)
  *
- * An implementation of the bounded priority queue abstraction.
- * A bounded priority queue is in many ways like a regular priority
- * queue.  It stores a collection of elements tagged with a real-
- * valued priority, and allows for access to the element whose
- * priority is the smallest.  However, unlike a regular priority
- * queue, the number of elements in a bounded priority queue has
- * a hard limit that is specified in the constructor.  Whenever an
- * element is added to the bounded priority queue such that the
- * size exceeds the maximum, the element with the highest priority
- * value will be ejected from the bounded priority queue.  In this
- * sense, a bounded priority queue is like a high score table for
- * a video game that stores a fixed number of elements and deletes
- * the least-important entry whenever a new value is inserted.
+ * 有界优先队列是一种特殊的优先队列,具有固定的最大容量
+ * 当队列满时插入新元素,会自动删除优先级最高(值最大)的元素
  *
- * When creating a bounded priority queue, you must specify the
- * maximum number of elements to store in the queue as an argument
- * to the constructor.  For example:
+ * 主要特性:
+ * - 固定容量限制
+ * - 自动淘汰最低优先级元素
+ * - 基于multimap实现,保证O(log n)的插入和删除
+ * - 适用于K近邻搜索等场景
  *
- * BoundedPQueue<int> bpq(15); // Holds up to fifteen values.
- *
- * The maximum size of the bounded priority queue can be obtained
- * using the maxSize() function, as in
- *
- * size_t k = bpq.maxSize();
- *
- * Beyond these restrictions, the bounded priority queue behaves
- * similarly to other containers.  You can query its size using
- * size() and check whether it is empty using empty().  You
- * can enqueue an element into the bounded priority queue by
- * writing
- *
- * bpq.enqueue(elem, priority);
- *
- * Note that after enqueuing the element, there is no guarantee
- * that the value will actually be in the queue.  If the queue
- * is full and the new element's priority exceeds the largest
- * priority in the container, it will not be added.
- *
- * You can dequeue elements from a bounded priority queue using
- * the dequeueMin() function, as in
- *
- * int val = bpq.dequeueMin();
- *
- * The bounded priority queue also allows you to query the min
- * and max priorities of the values in the queue.  These values
- * can be queried using the best() and worst() functions, which
- * return the smallest and largest priorities in the queue,
- * respectively.
+ * 使用示例:
+ * @code
+ * BoundedPQueue<int> bpq(15);  // 最多存储15个元素
+ * bpq.enqueue(42, 2.71);       // 插入元素,优先级为2.71
+ * int val = bpq.dequeueMin();  // 取出最小优先级的元素
+ * @endcode
  */
 
 #ifndef BOUNDED_PQUEUE_INCLUDED
@@ -59,110 +28,132 @@
 #include <limits>
 
 namespace KDTree{
+/**
+ * @class BoundedPQueue
+ * @brief 有界优先队列模板类
+ * @tparam T 存储的元素类型
+ *
+ * 维护固定数量的最小优先级元素
+ * 当队列满时,新插入的元素如果优先级小于当前最大优先级,则替换最大优先级元素
+ */
 template <typename T>
 class BoundedPQueue {
 public:
-    // Constructor: BoundedPQueue(size_t maxSize);
-    // Usage: BoundedPQueue<int> bpq(15);
-    // --------------------------------------------------
-    // Constructs a new, empty BoundedPQueue with
-    // maximum size equal to the constructor argument.
-    ///
+    /**
+     * @brief 构造函数
+     * @param maxSize 队列的最大容量
+     *
+     * 创建一个空的有界优先队列,最多可存储maxSize个元素
+     */
     explicit BoundedPQueue(std::size_t maxSize);
 
-    // void enqueue(const T& value, double priority);
-    // Usage: bpq.enqueue("Hi!", 2.71828);
-    // --------------------------------------------------
-    // Enqueues a new element into the BoundedPQueue with
-    // the specified priority. If this overflows the maximum
-    // size of the queue, the element with the highest
-    // priority will be deleted from the queue. Note that
-    // this might be the element that was just added.
+    /**
+     * @brief 插入元素到队列
+     * @param value 要插入的元素
+     * @param priority 元素的优先级(越小越优先)
+     *
+     * 如果队列已满且新元素优先级大于队列中最大优先级,则不插入
+     * 如果队列已满且新元素优先级小于队列中最大优先级,则插入并删除最大优先级元素
+     */
     void enqueue(const T& value, double priority);
 
-    // T dequeueMin();
-    // Usage: int val = bpq.dequeueMin();
-    // --------------------------------------------------
-    // Returns the element from the BoundedPQueue with the
-    // smallest priority value, then removes that element
-    // from the queue.
+    /**
+     * @brief 取出并删除最小优先级的元素
+     * @return 最小优先级的元素
+     *
+     * 前提条件: 队列非空
+     */
     T dequeueMin();
 
-    // size_t size() const;
-    // bool empty() const;
-    // Usage: while (!bpq.empty()) { ... }
-    // --------------------------------------------------
-    // Returns the number of elements in the queue and whether
-    // the queue is empty, respectively.
+    /**
+     * @brief 返回队列中的元素数量
+     * @return 当前元素数量
+     */
     std::size_t size() const;
+
+    /**
+     * @brief 判断队列是否为空
+     * @return 是否为空
+     */
     bool empty() const;
 
-    // size_t maxSize() const;
-    // Usage: size_t queueSize = bpq.maxSize();
-    // --------------------------------------------------
-    // Returns the maximum number of elements that can be
-    // stored in the queue.
+    /**
+     * @brief 返回队列的最大容量
+     * @return 最大容量
+     */
     std::size_t maxSize() const;
 
-    // double best() const;
-    // double worst() const;
-    // Usage: double highestPriority = bpq.worst();
-    // --------------------------------------------------
-    // best() returns the smallest priority of an element
-    // stored in the container (i.e. the priority of the
-    // element that will be dequeued first using dequeueMin).
-    // worst() returns the largest priority of an element
-    // stored in the container.  If an element is enqueued
-    // with a priority above this value, it will automatically
-    // be deleted from the queue.  Both functions return
-    // numeric_limits<double>::infinity() if the queue is
-    // empty.
+    /**
+     * @brief 返回队列中的最小优先级
+     * @return 最小优先级值,如果队列为空则返回infinity
+     *
+     * 这是下次dequeueMin()将返回的元素的优先级
+     */
     double best()  const;
+
+    /**
+     * @brief 返回队列中的最大优先级
+     * @return 最大优先级值,如果队列为空则返回infinity
+     *
+     * 如果插入元素的优先级大于此值,该元素将被自动拒绝
+     */
     double worst() const;
 
 private:
-    // This class is layered on top of a multimap mapping from priorities
-    // to elements with those priorities.
-    std::multimap<double, T> elems;
-    std::size_t maximumSize;
+    // 使用multimap实现,键为优先级,值为元素
+    // multimap自动按键排序,支持重复键
+    std::multimap<double, T> elems;  ///< 存储元素的multimap
+    std::size_t maximumSize;         ///< 最大容量
 };
 
-/** BoundedPQueue class implementation details */
+// ========== BoundedPQueue类实现 ==========
 
+/**
+ * @brief 构造函数实现
+ */
 template <typename T>
 BoundedPQueue<T>::BoundedPQueue(std::size_t maxSize) {
     maximumSize = maxSize;
 }
 
-// enqueue adds the element to the map, then deletes the last element of the
-// map if there size exceeds the maximum size.
+/**
+ * @brief 插入元素实现
+ *
+ * 先将元素插入multimap,然后检查大小
+ * 如果超过最大容量,删除最大优先级(最后一个)元素
+ */
 template <typename T>
 void BoundedPQueue<T>::enqueue(const T& value, double priority) {
-    // Add the element to the collection.
+    // 将元素添加到集合中
     elems.insert(std::make_pair(priority, value));
 
-    // If there are too many elements in the queue, drop off the last one.
+    // 如果元素过多,删除最后一个(优先级最高的)
     if (size() > maxSize()) {
         typename std::multimap<double, T>::iterator last = elems.end();
-        --last; // Now points to highest-priority element
+        --last; // 现在指向最高优先级元素
         elems.erase(last);
     }
 }
 
-// dequeueMin copies the lowest element of the map (the one pointed at by
-// begin()) and then removes it.
+/**
+ * @brief 取出最小优先级元素实现
+ *
+ * 复制第一个元素(优先级最小)并删除它
+ */
 template <typename T>
 T BoundedPQueue<T>::dequeueMin() {
-    // Copy the best value.
+    // 复制最佳值
     T result = elems.begin()->second;
 
-    // Remove it from the map.
+    // 从map中删除它
     elems.erase(elems.begin());
 
     return result;
 }
 
-// size() and empty() call directly down to the underlying map.
+/**
+ * @brief size()和empty()直接调用底层map的方法
+ */
 template <typename T>
 std::size_t BoundedPQueue<T>::size() const {
     return elems.size();
@@ -173,14 +164,18 @@ bool BoundedPQueue<T>::empty() const {
     return elems.empty();
 }
 
-// maxSize just returns the appropriate data member.
+/**
+ * @brief 返回最大容量
+ */
 template <typename T>
 std::size_t BoundedPQueue<T>::maxSize() const {
     return maximumSize;
 }
 
-// The best() and worst() functions check if the queue is empty,
-// and if so return infinity.
+/**
+ * @brief best()和worst()函数检查队列是否为空
+ * 如果为空返回infinity,否则返回相应的优先级
+ */
 template <typename T>
 double BoundedPQueue<T>::best() const {
     return empty()? std::numeric_limits<double>::infinity() : elems.begin()->first;

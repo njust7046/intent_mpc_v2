@@ -1,8 +1,17 @@
-/*
-*	File: rrtBase.h
-*	---------------
-*   Base class for RRT planner.
-*/
+/**
+ * @file rrtBase.h
+ * @brief RRT（快速随机树）规划器基类
+ *
+ * 提供RRT和RRT*算法的通用框架和接口
+ * 支持N维空间的路径规划，基于KD树实现高效的最近邻搜索
+ *
+ * 主要特性：
+ * - 模板化设计，支持任意维度空间
+ * - 基于KD树的高效最近邻查询
+ * - 碰撞检测接口
+ * - 目标到达判断
+ * - 路径回溯
+ */
 #ifndef RRTBASE_H
 #define RRTBASE_H
 #include <ros/ros.h>
@@ -15,125 +24,265 @@
 using std::cout; using std::endl;
 
 namespace globalPlanner{
+	/**
+	 * @class rrtBase
+	 * @brief RRT规划器基类（模板类）
+	 * @tparam N 空间维度（通常为3，表示3D空间）
+	 *
+	 * 提供RRT算法的核心功能和接口
+	 * 派生类需要实现地图相关的虚函数
+	 */
 	template <std::size_t N>
 	class rrtBase{
 	private:
-		ros::NodeHandle nh_;
+		ros::NodeHandle nh_;  ///< ROS节点句柄
 
 	protected:
-		double delQ_; // incremental distance
-		double dR_; // criteria for goal reaching
-		KDTree::Point<N> start_;
-		KDTree::Point<N> goal_;
-		KDTree::Point<N> emptyToken_;
-		KDTree::KDTree<N, int> ktree_; // KDTree
-		std::unordered_map<KDTree::Point<N>, KDTree::Point<N>, KDTree::PointHasher> parent_; // for backtracking
-		std::vector<double> collisionBox_; // (lx, ly, lz)
-		std::vector<double> envBox_; // value of min max of x y and z
-		double connectGoalRatio_;
-		double timeout_;
+		// ========== 算法参数 ==========
+		double delQ_;                             ///< 增量距离（每次扩展的步长）
+		double dR_;                               ///< 目标到达判定半径
+		KDTree::Point<N> start_;                  ///< 起点
+		KDTree::Point<N> goal_;                   ///< 终点
+		KDTree::Point<N> emptyToken_;             ///< 空标记（用于表示根节点的父节点）
+		KDTree::KDTree<N, int> ktree_;            ///< KD树（存储所有采样节点）
+		std::unordered_map<KDTree::Point<N>, KDTree::Point<N>, KDTree::PointHasher> parent_;  ///< 父节点映射（用于路径回溯）
+		std::vector<double> collisionBox_;        ///< 碰撞检测盒尺寸 (lx, ly, lz)
+		std::vector<double> envBox_;              ///< 环境边界 (xmin, xmax, ymin, ymax, zmin, zmax)
+		double connectGoalRatio_;                 ///< 直接连接目标的概率
+		double timeout_;                          ///< 规划超时时间 (秒)
 
 	public:
-		// Default constructor
-		rrtBase(); 
+		// ========== 构造与析构 ==========
+		/**
+		 * @brief 默认构造函数
+		 */
+		rrtBase();
 
-		// Constructor
+		/**
+		 * @brief 构造函数（使用Point类型）
+		 * @param start 起点
+		 * @param goal 终点
+		 * @param collisionBox 碰撞检测盒尺寸
+		 * @param envBox 环境边界
+		 * @param delQ 增量距离
+		 * @param dR 目标到达半径
+		 * @param connectGoalRatio 连接目标概率
+		 * @param timeout 超时时间
+		 */
 		rrtBase(KDTree::Point<N> start, KDTree::Point<N> goal, std::vector<double> collisionBox, std::vector<double> envBox, double delQ, double dR, double connectGoalRatio, double timeout);
 
+		/**
+		 * @brief 构造函数（使用vector类型）
+		 */
 		rrtBase(std::vector<double> start, std::vector<double> goal,  std::vector<double> collisionBox, std::vector<double> envBox, double delQ, double dR, double connectGoalRatio, double timeout);
 
+		/**
+		 * @brief 构造函数（带ROS节点句柄，使用Point类型）
+		 */
 		rrtBase(const ros::NodeHandle &nh, KDTree::Point<N> start, KDTree::Point<N> goal, std::vector<double> collisionBox, std::vector<double> envBox, double delQ, double dR, double connectGoalRatio, double timeout);
 
+		/**
+		 * @brief 构造函数（带ROS节点句柄，使用vector类型）
+		 */
 		rrtBase(const ros::NodeHandle &nh, std::vector<double> start, std::vector<double> goal,  std::vector<double> collisionBox, std::vector<double> envBox, double delQ, double dR, double connectGoalRatio, double timeout);
 
+		/**
+		 * @brief 构造函数（仅参数，需后续更新起点和终点）
+		 */
 		rrtBase(std::vector<double> collisionBox, std::vector<double> envBox, double delQ, double dR, double connectGoalRatio, double timeout);
 
-
+		/**
+		 * @brief 虚析构函数
+		 */
 		virtual ~rrtBase();
 
-		// load map based on different map representaiton
+		// ========== 纯虚函数（派生类必须实现） ==========
+		/**
+		 * @brief 更新地图（根据不同地图表示实现）
+		 */
 		virtual void updateMap() = 0;
 
-		// collision checking function based on map and collision box:
+		/**
+		 * @brief 碰撞检测
+		 * @param q 待检测的点
+		 * @return 是否发生碰撞
+		 */
 		virtual bool checkCollision(const KDTree::Point<N>& q) = 0;
 
-		// random sample in valid space (based on current map)
+		/**
+		 * @brief 在有效空间内随机采样
+		 * @param qRand 输出的随机采样点
+		 */
 		virtual void randomConfig(KDTree::Point<N>& qRand) = 0;
 
-		// Find the nearest vertex (node) in the tree
-		void nearestVertex(const KDTree::Point<N>& qKey, KDTree::Point<N>& qNear);
-
-		// Steer function: basd on delta
-		void newConfig(const KDTree::Point<N>& qNear, const KDTree::Point<N>& qRand, KDTree::Point<N>& qNew);
-
-		void backTrace(const KDTree::Point<N>& qGoal, std::vector<KDTree::Point<N>>& plan);
-
-		bool isReach(const KDTree::Point<N>& q);
-
-		// *** Core function: make plan based on all input ***
+		/**
+		 * @brief 执行路径规划（核心函数）
+		 * @param plan 输出的路径
+		 */
 		virtual void makePlan(std::vector<KDTree::Point<N>>& plan) = 0;
 
-		// add the new vertex to the RRT: add to KDTree
+		// ========== RRT核心算法函数 ==========
+		/**
+		 * @brief 在树中查找最近的顶点
+		 * @param qKey 查询点
+		 * @param qNear 输出的最近顶点
+		 */
+		void nearestVertex(const KDTree::Point<N>& qKey, KDTree::Point<N>& qNear);
+
+		/**
+		 * @brief 引导函数：从qNear向qRand扩展固定步长
+		 * @param qNear 最近节点
+		 * @param qRand 随机采样点
+		 * @param qNew 输出的新节点
+		 */
+		void newConfig(const KDTree::Point<N>& qNear, const KDTree::Point<N>& qRand, KDTree::Point<N>& qNew);
+
+		/**
+		 * @brief 从目标回溯路径
+		 * @param qGoal 目标点
+		 * @param plan 输出的路径
+		 */
+		void backTrace(const KDTree::Point<N>& qGoal, std::vector<KDTree::Point<N>>& plan);
+
+		/**
+		 * @brief 判断是否到达目标
+		 * @param q 当前点
+		 * @return 是否到达
+		 */
+		bool isReach(const KDTree::Point<N>& q);
+
+		/**
+		 * @brief 添加新顶点到RRT树
+		 * @param qNew 新顶点
+		 */
 		void addVertex(const KDTree::Point<N>& qNew);
 
-		// add the new edge to RRT: add to rrt 
+		/**
+		 * @brief 添加新边到RRT树
+		 * @param qNear 父节点
+		 * @param qNew 子节点
+		 */
 		void addEdge(const KDTree::Point<N>& qNear, const KDTree::Point<N>& qNew);
+
+		/**
+		 * @brief 检查两节点间是否无边连接
+		 * @param qNear 节点1
+		 * @param qNew 节点2
+		 * @return 是否无边
+		 */
 		bool hasNoEdge(const KDTree::Point<N>& qNear, const KDTree::Point<N>& qNew);
 
-		// update start position:
+		// ========== 起点更新函数 ==========
+		/**
+		 * @brief 更新起点（vector类型）
+		 */
 		void updateStart(const std::vector<double>& newStart);
+
+		/**
+		 * @brief 更新起点（Eigen类型）
+		 */
 		void updateStart(const Eigen::Vector3d& newStart);
+
+		/**
+		 * @brief 更新起点（Point类型）
+		 */
 		void updateStart(const KDTree::Point<N>& newStart);
+
+		/**
+		 * @brief 更新起点（ROS Pose类型）
+		 */
 		void updateStart(const geometry_msgs::Pose& newStart);
 
-		// update goal position:
+		// ========== 终点更新函数 ==========
+		/**
+		 * @brief 更新终点（vector类型）
+		 */
 		void updateGoal(const std::vector<double>& newGoal);
+
+		/**
+		 * @brief 更新终点（Eigen类型）
+		 */
 		void updateGoal(const Eigen::Vector3d& newGoal);
+
+		/**
+		 * @brief 更新终点（Point类型）
+		 */
 		void updateGoal(const KDTree::Point<N>& newGoal);
+
+		/**
+		 * @brief 更新终点（ROS Pose类型）
+		 */
 		void updateGoal(const geometry_msgs::Pose& newGoal);
 
+		/**
+		 * @brief 清空RRT树
+		 */
 		void clearRRT();
 
-		// return start point:
+		// ========== 访问器函数 ==========
+		/**
+		 * @brief 获取起点
+		 */
 		KDTree::Point<N> getStart();
 
-		// return goal point:
+		/**
+		 * @brief 获取终点
+		 */
 		KDTree::Point<N> getGoal();
 
-		// return collision box:
+		/**
+		 * @brief 获取碰撞检测盒
+		 */
 		std::vector<double> getCollisionBox();
 
-		// return env box:
+		/**
+		 * @brief 获取环境边界
+		 */
 		std::vector<double> getEnvBox();
 
-		// return dR:
+		/**
+		 * @brief 获取到达半径
+		 */
 		double getReachRadius();
 
-		// return parent dictionary (edge)
-		std::unordered_map<KDTree::Point<N>, KDTree::Point<N>, KDTree::PointHasher> getParentDict(); 
+		/**
+		 * @brief 获取父节点字典（边信息）
+		 */
+		std::unordered_map<KDTree::Point<N>, KDTree::Point<N>, KDTree::PointHasher> getParentDict();
 
-		// return goal conenct ratio
+		/**
+		 * @brief 获取连接目标概率
+		 */
 		double getConnectGoalRatio();
 
-		// return timeout
+		/**
+		 * @brief 获取超时时间
+		 */
 		double getTimeout();
 
 	};
 
-	// ===============Function Definition===============================
-		template <std::size_t N>
+	// ========== 函数实现（模板类需在头文件中实现） ==========
+
+	/**
+	 * @brief 默认构造函数实现
+	 * 初始化空标记为特殊值-11311
+	 */
+	template <std::size_t N>
 	rrtBase<N>::rrtBase(){
-		this->emptyToken_[0] = -11311; 
+		this->emptyToken_[0] = -11311;
 	};
 
-	// Constructor:
+	/**
+	 * @brief 构造函数实现（Point类型）
+	 */
 	template <std::size_t N>
-	rrtBase<N>::rrtBase(KDTree::Point<N> start, KDTree::Point<N> goal, std::vector<double> collisionBox, std::vector<double> envBox, double delQ, double dR, double connectGoalRatio, double timeout) 
+	rrtBase<N>::rrtBase(KDTree::Point<N> start, KDTree::Point<N> goal, std::vector<double> collisionBox, std::vector<double> envBox, double delQ, double dR, double connectGoalRatio, double timeout)
 	: collisionBox_(collisionBox), envBox_(envBox), delQ_(delQ), dR_(dR), connectGoalRatio_(connectGoalRatio), timeout_(timeout){
 		this->start_ = start;
 		this->goal_ = goal;
-		this->emptyToken_[0] = -11311; 
-		this->parent_[start_] = this->emptyToken_; // set start parent to NULL
+		this->emptyToken_[0] = -11311;
+		this->parent_[start_] = this->emptyToken_; // 设置起点的父节点为空标记
 	}
 
 	template <std::size_t N>

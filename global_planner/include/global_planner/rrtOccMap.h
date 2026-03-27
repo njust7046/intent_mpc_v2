@@ -1,8 +1,16 @@
-/*
-*	FILE: rrtOccMap.h
-*	---------------------------
-*	RRT planner based on occupancy map
-*/
+/**
+ * @file rrtOccMap.h
+ * @brief 基于占据栅格地图的RRT规划器
+ *
+ * 使用自定义的占据栅格地图(occMap)作为环境表示的RRT路径规划器
+ * 相比Octomap,提供更灵活的地图接口和更高效的碰撞检测
+ *
+ * 主要特性:
+ * - 基于体素化占据栅格地图
+ * - 支持动态地图更新
+ * - 路径有效性检查
+ * - 路径快捷方式优化
+ */
 
 #ifndef RRTOCCMAP_H
 #define RRTOCCMAP_H
@@ -14,43 +22,149 @@
 #include <visualization_msgs/MarkerArray.h>
 
 namespace globalPlanner{
+	/**
+	 * @class rrtOccMap
+	 * @brief 基于占据栅格地图的RRT规划器类
+	 * @tparam N 空间维度(通常为3)
+	 *
+	 * 继承自rrtBase,实现基于自定义占据栅格地图的碰撞检测和采样
+	 */
 	template <std::size_t N>
 	class rrtOccMap : public rrtBase<N>{
 	protected:
-		ros::NodeHandle nh_;
-		ros::Publisher rrtVisPub_;
-		ros::Timer visTimer_;
-		std::shared_ptr<mapManager::occMap> map_;
+		// ========== ROS接口 ==========
+		ros::NodeHandle nh_;               ///< ROS节点句柄
+		ros::Publisher rrtVisPub_;         ///< RRT树可视化发布器
+		ros::Timer visTimer_;              ///< 可视化定时器
 
-		double mapRes_;
-		double envLimit_[6];
-		double sampleRegion_[6];
-		double maxShortcutThresh_;
-		bool ignoreUnknown_;
-		bool passGoalCheck_;
+		// ========== 地图相关 ==========
+		std::shared_ptr<mapManager::occMap> map_;  ///< 占据栅格地图指针
 
-		std::vector<KDTree::Point<N>> currPlan_;
+		// ========== 算法参数 ==========
+		double mapRes_;                    ///< 地图分辨率
+		double envLimit_[6];               ///< 环境边界限制
+		double sampleRegion_[6];           ///< 采样区域边界
+		double maxShortcutThresh_;         ///< 路径快捷方式最大阈值
+		bool ignoreUnknown_;               ///< 是否忽略未知区域
+		bool passGoalCheck_;               ///< 是否跳过目标检查
+
+		// ========== 运行时数据 ==========
+		std::vector<KDTree::Point<N>> currPlan_;  ///< 当前规划路径
 
 	public:
+		// ========== 构造与析构 ==========
+		/**
+		 * @brief 构造函数
+		 * @param nh ROS节点句柄
+		 */
 		rrtOccMap(const ros::NodeHandle& nh);
+
+		/**
+		 * @brief 析构函数
+		 */
 		~rrtOccMap();
+
+		// ========== 初始化函数 ==========
+		/**
+		 * @brief 从ROS参数服务器初始化参数
+		 */
 		void initParam();
+
+		/**
+		 * @brief 注册ROS发布器
+		 */
 		void registerPub();
+
+		/**
+		 * @brief 注册ROS回调函数
+		 */
 		void registerCallback();
+
+		// ========== 地图相关函数 ==========
+		/**
+		 * @brief 设置占据栅格地图
+		 * @param map 地图指针
+		 */
 		void setMap(const std::shared_ptr<mapManager::occMap>& map);
+
+		/**
+		 * @brief 更新地图(虚函数实现)
+		 */
 		void updateMap();
+
+		/**
+		 * @brief 更新采样区域
+		 */
 		void updateSampleRegion();
+
+		// ========== 核心规划函数 ==========
+		/**
+		 * @brief 执行RRT规划
+		 * @param plan 输出的路径
+		 */
 		void makePlan(std::vector<KDTree::Point<N>>& plan);
+
+		/**
+		 * @brief 执行RRT规划(ROS消息格式)
+		 * @param path 输出的路径消息
+		 */
 		void makePlan(nav_msgs::Path& path);
 
+		/**
+		 * @brief 在有效空间内随机采样
+		 * @param qRand 输出的随机点
+		 */
 		void randomConfig(KDTree::Point<N>& qRand);
+
+		// ========== 路径优化函数 ==========
+		/**
+		 * @brief 路径快捷方式优化
+		 * @param plan 原始路径
+		 * @param planSc 输出的优化路径
+		 */
 		void shortcutWaypointPaths(const std::vector<KDTree::Point<N>>& plan, std::vector<KDTree::Point<N>>& planSc);
+
+		// ========== 路径验证函数 ==========
+		/**
+		 * @brief 检查当前路径是否仍然有效
+		 * @return 路径是否有效
+		 *
+		 * 用于动态环境中检测路径是否被新障碍物阻挡
+		 */
 		bool isCurrPathValid();
+
+		/**
+		 * @brief 检查是否有新的目标点
+		 * @param goal 新的目标位姿
+		 * @return 是否为新目标
+		 */
 		bool hasNewGoal(const geometry_msgs::Pose& goal);
+
+		// ========== 工具函数 ==========
+		/**
+		 * @brief 将路径转换为ROS消息格式
+		 * @param pathTemp 路径点序列
+		 * @param path 输出的路径消息
+		 */
 		void pathMsgConverter(const std::vector<KDTree::Point<N>>& pathTemp, nav_msgs::Path& path);
+
+		/**
+		 * @brief 检查点是否发生碰撞
+		 * @param q 待检查的点
+		 * @return true表示碰撞
+		 */
 		bool checkCollision(const KDTree::Point<N>& q);
 
+		// ========== 可视化函数 ==========
+		/**
+		 * @brief 可视化定时器回调函数
+		 * @param event 定时器事件
+		 */
 		void visCB(const ros::TimerEvent&);
+
+		/**
+		 * @brief 发布RRT路径可视化
+		 */
 		void publishRRTPath();
 	}; 
 

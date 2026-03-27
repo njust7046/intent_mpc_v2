@@ -1,14 +1,25 @@
-/*
-*	File: dep.cpp
-*	---------------
-*   dynamic exploration planner implementation
-*/
+/**
+ * @file dep.cpp
+ * @brief 动态探索规划器（DEP）实现文件
+ *
+ * 实现DEP类的所有成员函数
+ * 包括参数初始化、路线图构建、信息增益计算、路径规划等核心功能
+ */
 
 #include <global_planner/dep.h>
 #include <random>
 
 
 namespace globalPlanner{
+	/**
+	 * @brief DEP构造函数
+	 *
+	 * 初始化流程：
+	 * 1. 设置命名空间和日志前缀
+	 * 2. 从ROS参数服务器加载参数
+	 * 3. 初始化内部模块（路线图等）
+	 * 4. 注册ROS发布器和订阅器
+	 */
 	DEP::DEP(const ros::NodeHandle& nh) : nh_(nh){
 		this->ns_ = "/DEP";
 		this->hint_ = "[DEP]";
@@ -18,17 +29,39 @@ namespace globalPlanner{
 		this->registerCallback();
 	}
 
+	/**
+	 * @brief 设置占据栅格地图
+	 * @param map 地图智能指针
+	 */
 	void DEP::setMap(const std::shared_ptr<mapManager::occMap>& map){
 		this->map_ = map;
 	}
 
+	/**
+	 * @brief 加载机器人速度参数
+	 * @param vel 线速度 (m/s)
+	 * @param angularVel 角速度 (rad/s)
+	 *
+	 * 用于路径代价计算和时间估计
+	 */
 	void DEP::loadVelocity(double vel, double angularVel){
 		this->vel_ = vel;
 		this->angularVel_ = angularVel;
 	}
 
+	/**
+	 * @brief 从ROS参数服务器初始化所有参数
+	 *
+	 * 参数类别：
+	 * - 采样区域边界（局部/全局）
+	 * - 采样数量阈值
+	 * - 安全距离参数
+	 * - 传感器参数（FOV、探测距离）
+	 * - 路线图构建参数
+	 * - 信息增益计算参数
+	 */
 	void DEP::initParam(){
-		// odom topic name
+		// ========== 里程计话题名称 ==========
 		if (not this->nh_.getParam(this->ns_ + "/odom_topic", this->odomTopic_)){
 			this->odomTopic_ = "/CERLAB/quadcopter/odom";
 			cout << this->hint_ << ": No odom topic name. Use default: /CERLAB/quadcopter/odom" << endl;
